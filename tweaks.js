@@ -149,13 +149,25 @@
     }
 
     function auto_advance() {
-        console.log('AutoAdvanceTickbox checked:', is_checked('AutoAdvanceTickbox'));
-        console.log('Activity title:', document.getElementById('activity-title').innerText);
-        
-        if (is_checked('AutoAdvanceTickbox') && document.getElementById('activity-title').innerText !== 'Quiz') {
-            click('.footnav.goRight');
+        if (is_checked('AutoAdvanceTickbox')) {
+            var activityTitle = document.getElementById("activity-title").innerText;
+            if (activityTitle !== "Quiz") {
+                try {
+                    document.querySelector('.footnav.goRight').click();
+                } catch (TypeError) {}
+                try {
+                    window.frames[0].API.FrameChain.nextFrame();
+                } catch (TypeError) {}
+                
+                var frameRightLinks = document.querySelectorAll('li.FrameRight a');
+                frameRightLinks.forEach(function(link) {
+                    link.click();
+                });
+            }
         }
     }
+    
+    
 
     function skip_intro() {
         if (is_checked('SkipIntroTickbox')) {
