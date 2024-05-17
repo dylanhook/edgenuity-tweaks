@@ -1,14 +1,15 @@
 (function() {
     'use strict';
 
-    const config_elements = ['SkipVideosTickbox', 'AutoAdvanceTickbox', 'SkipIntroTickbox', 'GuessPracticeTickbox', 'VocabCompleterTickbox', 'ShowColumnTickbox'];
+    const config_elements = ['skip_videos_tickbox', 'auto_advance_tickbox', 'skip_intro_tickbox', 'guess_practice_tickbox', 'vocab_completer_tickbox', 'show_column_tickbox', 'debug_console_tickbox'];
     const features = [
-        { name: 'Skip Videos', id: 'SkipVideosTickbox' },
-        { name: 'Auto Advance', id: 'AutoAdvanceTickbox' },
-        { name: 'Skip Intro', id: 'SkipIntroTickbox' },
-        { name: 'Guess Practice', id: 'GuessPracticeTickbox' },
-        { name: 'Vocab Completer', id: 'VocabCompleterTickbox' },
-        { name: 'Show Right Column', id: 'ShowColumnTickbox' }
+        { name: 'Skip Videos', id: 'skip_videos_tickbox' },
+        { name: 'Auto Advance', id: 'auto_advance_tickbox' },
+        { name: 'Skip Intro', id: 'skip_intro_tickbox' },
+        { name: 'Guess Practice', id: 'guess_practice_tickbox' },
+        { name: 'Vocab Completer', id: 'vocab_completer_tickbox' },
+        { name: 'Show Right Column', id: 'show_column_tickbox' },
+        { name: 'Debug Console', id: 'debug_console_tickbox' }
     ];
 
     const overlay = create_overlay();
@@ -18,6 +19,15 @@
     features.forEach(feature => config_window.appendChild(build_menu_entry(feature.name, feature.id)));
     create_socials_button(config_window);  // Add the socials button to the config menu
     create_tweaks_button();
+
+    // Create a textarea element for debug console output
+    var debug_console = document.createElement('textarea');
+    debug_console.setAttribute('id', 'debug_console');
+    debug_console.style.cssText = 'position: fixed; bottom: 10px; left: 10px; background-color: rgba(0, 0, 0, 0.8); color: #fff; border-radius: 5px; padding: 10px; width: 400px; height: 200px; font-family: monospace; resize: none; z-index: 9999;';
+    debug_console.readOnly = true;
+
+    // Append the debug console to the document body
+    document.body.appendChild(debug_console);
 
     setInterval(loop, 1000);
     load_config();
@@ -123,35 +133,152 @@
                 document.getElementById(id).checked = true;
             }
         });
+        toggle_debug_console();
     }
 
     function sync_config() {
         config_elements.forEach(id => {
             localStorage.setItem(id, document.getElementById(id).checked);
         });
+        toggle_debug_console();
     }
 
     function loop() {
         skip_videos();
-        auto_advance();
         skip_intro();
-        guess_practice();
         vocab_completer();
         show_column();
         sync_config();
+        auto_advance_if_elapsed_time_reached_total();
     }
 
     function skip_videos() {
-        if (is_checked('SkipVideosTickbox')) {
+        if (is_checked('skip_videos_tickbox')) {
             click('.play-button');
             click('.video-close-button');
         }
     }
 
+    // Variable to store the last observed elapsed time
+    var last_elapsed_time = '';
+
+    // Variable to store the total time
+    var total_time = '';
+
+    // Variable to store the time when the timer last moved
+    var last_time_moved = new Date().getTime();
+
+    // Function to output text to the debug console
+    function write_to_debug_console(text) {
+        if (is_checked('debug_console_tickbox')) {
+            debug_console.value += text + '\n';
+        }
+    }
+
+    // Function to execute auto_advance function
+    function auto_advance_if_elapsed_time_reached_total() {
+        // Calculate the current time
+        var current_time = new Date().getTime();
+        // Calculate the elapsed time since the timer last moved
+        var elapsed_since_last_move = current_time - last_time_moved;
+        // Get the iframe element
+        var iframe = document.getElementById('stageFrame');
+        if (iframe) {
+            // Access the contentDocument of the iframe
+            var iframe_document = iframe.contentDocument || iframe.contentWindow.document;
+            // Find the timer element within the iframe content
+            var timer_element = iframe_document.getElementById('uid1_time');
+            if (timer_element) {
+                var timer_text = timer_element.textContent;
+                var times = timer_text.split(' / ');
+                var elapsed_time = times[0];
+                total_time = times[1];
+                // Check if elapsed time has reached total time
+                if (elapsed_time === total_time && elapsed_time !== last_elapsed_time) {
+                    // Output to debug console
+                    write_to_debug_console('Elapsed time has reached total time.');
+                    // Execute auto_advance function
+                    if (is_checked('auto_advance_tickbox')) {
+                        auto_advance();
+                    }
+                } else if (elapsed_time !== last_elapsed_time) { // Check if the timer has moved
+                    // Update the time when the timer last moved
+                    last_time_moved = new Date().getTime();
+                } else if (elapsed_since_last_move > 3000) { // Check if the timer has stopped moving for 3 seconds
+                    // Output to debug console
+                    write_to_debug_console('Timer has stopped moving for 3 seconds.');
+                    // Execute auto_advance function
+                    auto_advance();
+                }
+                // Update last observed elapsed time
+                last_elapsed_time = elapsed_time;
+            } else {
+                write_to_debug_console('Timer element not found in the iframe.');
+                if (is_checked('guess_practice_tickbox')) {
+                    guess_practice();
+                }
+                if (is_checked('auto_advance_tickbox')) {
+                    auto_advance();
+                }
+            }
+        } else {
+            write_to_debug_console('Iframe not found.');
+            if (is_checked('guess_practice_tickbox')) {
+                guess_practice();
+            }
+            if (is_checked('auto_advance_tickbox')) {
+                auto_advance();
+            }
+        }
+    }
+
+    // Function to observe changes in the timer element
+    function observe_timer_changes(timer_element) {
+        // Create a MutationObserver to watch for changes in the timer element
+        var observer = new MutationObserver(function(mutations_list, observer) {
+            // Whenever the content of the timer element changes, extract and output the new elapsed time and total time
+            var timer_text = timer_element.textContent;
+            var times = timer_text.split(' / ');
+            var elapsed_time = times[0];
+            total_time = times[1];
+            write_to_debug_console('New elapsed time: ' + elapsed_time);
+            write_to_debug_console('Total time: ' + total_time);
+        });
+        // Start observing changes to the timer element's content
+        observer.observe(timer_element, { subtree: true, character_data: true, child_list: true });
+    }
+
+    // Function to extract timer information from the iframe content
+    function extract_timer_info_from_iframe() {
+        write_to_debug_console('Script started...');
+        // Get the iframe element
+        var iframe = document.getElementById('stageFrame');
+        if (iframe) {
+            // Try to find the timer element every second
+            setInterval(function() {
+                // Access the contentDocument of the iframe
+                var iframe_document = iframe.contentDocument || iframe.contentWindow.document;
+                // Find the timer element within the iframe content
+                var timer_element = iframe_document.getElementById('uid1_time');
+                if (timer_element) {
+                    // If the timer element is found, stop checking and start observing changes
+                    clearInterval(timer_check_interval);
+                    observe_timer_changes(timer_element);
+                }
+            }, 1000);
+        } else {
+            write_to_debug_console('Iframe not found.');
+        }
+    }
+
+    // Call the extract_timer_info_from_iframe function immediately
+    extract_timer_info_from_iframe();
+
+    // Function to execute auto_advance function
     function auto_advance() {
-        if (is_checked('AutoAdvanceTickbox')) {
-            var activityTitle = document.getElementById("activity-title").innerText;
-            if (activityTitle !== "Quiz") {
+        if (is_checked('auto_advance_tickbox')) {
+            var activity_title = document.getElementById("activity-title").innerText;
+            if (activity_title !== "Quiz") {
                 try {
                     document.querySelector('.footnav.goRight').click();
                 } catch (TypeError) {}
@@ -159,41 +286,37 @@
                     window.frames[0].API.FrameChain.nextFrame();
                 } catch (TypeError) {}
                 
-                var frameRightLinks = document.querySelectorAll('li.FrameRight a');
-                frameRightLinks.forEach(function(link) {
+                var frame_right_links = document.querySelectorAll('li.FrameRight a');
+                frame_right_links.forEach(function(link) {
                     link.click();
                 });
             }
         }
     }
-    
-    
 
     function skip_intro() {
-        if (is_checked('SkipIntroTickbox')) {
+        if (is_checked('skip_intro_tickbox')) {
             try { window.frames[0].document.getElementById('invis-o-div').remove(); } catch (e) {}
         }
     }
 
     function guess_practice() {
-        if (is_checked('GuessPracticeTickbox')) {
-            try {
-                const activity_title = document.getElementById('activity-title').innerText;
-                if (activity_title === 'Assignment') return;
+        try {
+            const activity_title = document.getElementById('activity-title').innerText;
+            if (activity_title === 'Assignment') return;
 
-                if (['Instruction', 'Warm-Up', 'Practice'].includes(activity_title)) {
-                    const options = window.frames[0].frames[0].document.getElementsByClassName('answer-choice-button');
-                    if (options.length) {
-                        options[Math.floor(Math.random() * options.length)].click();
-                    }
-                    try { window.frames[0].API.Frame.check(); } catch (e) {}
+            if (['Instruction', 'Warm-Up', 'Practice'].includes(activity_title)) {
+                const options = window.frames[0].frames[0].document.getElementsByClassName('answer-choice-button');
+                if (options.length) {
+                    options[Math.floor(Math.random() * options.length)].click();
                 }
-            } catch (e) {}
-        }
+                try { window.frames[0].API.Frame.check(); } catch (e) {}
+            }
+        } catch (e) {}
     }
 
     function vocab_completer() {
-        if (is_checked('VocabCompleterTickbox') && document.getElementById('activity-title').innerText === 'Vocabulary') {
+        if (is_checked('vocab_completer_tickbox') && document.getElementById('activity-title').innerText === 'Vocabulary') {
             try {
                 window.frames[0].document.getElementsByClassName('word-textbox')[0].value = window.frames[0].document.getElementsByClassName('word-background')[0].innerText;
                 for (const button of window.frames[0].document.getElementsByClassName('playbutton vocab-play')) {
@@ -205,7 +328,7 @@
     }
 
     function show_column() {
-        if (is_checked('ShowColumnTickbox')) {
+        if (is_checked('show_column_tickbox')) {
             try { window.frames[0].frames[0].document.getElementsByClassName('right-column')[0].children[0].style.display = 'block'; } catch (e) {}
             try { window.frames[0].frames[0].document.getElementsByClassName('left-column')[0].children[0].style.display = 'block'; } catch (e) {}
         }
@@ -217,5 +340,13 @@
 
     function click(selector, parent = document) {
         try { (parent || document).querySelector(selector).click(); } catch (e) {}
+    }
+
+    function toggle_debug_console() {
+        if (is_checked('debug_console_tickbox')) {
+            debug_console.style.display = 'block';
+        } else {
+            debug_console.style.display = 'none';
+        }
     }
 })();
