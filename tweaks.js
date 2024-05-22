@@ -151,87 +151,72 @@
         sync_config();
         auto_advance_if_elapsed_time_reached_total();
     }
-
+    
     function skip_videos() {
         if (is_checked('skip_videos_tickbox')) {
             click('.play-button');
             click('.video-close-button');
         }
     }
-
+    
     // Variable to store the last observed elapsed time
     var last_elapsed_time = '';
-
+    
     // Variable to store the total time
     var total_time = '';
-
+    
     // Variable to store the time when the timer last moved
     var last_time_moved = new Date().getTime();
-
+    
     // Function to output text to the debug console
     function write_to_debug_console(text) {
         if (is_checked('debug_console_tickbox')) {
             debug_console.value += text + '\n';
         }
     }
-
+    
     // Function to execute auto_advance function
     function auto_advance_if_elapsed_time_reached_total() {
-        // Calculate the current time
         var current_time = new Date().getTime();
-        // Calculate the elapsed time since the timer last moved
         var elapsed_since_last_move = current_time - last_time_moved;
-        // Get the iframe element
         var iframe = document.getElementById('stageFrame');
+    
         if (iframe) {
-            // Access the contentDocument of the iframe
             var iframe_document = iframe.contentDocument || iframe.contentWindow.document;
-            // Find the timer element within the iframe content
             var timer_element = iframe_document.getElementById('uid1_time');
+    
             if (timer_element) {
                 var timer_text = timer_element.textContent;
                 var times = timer_text.split(' / ');
                 var elapsed_time = times[0];
-                total_time = times[1];
-                // Check if elapsed time has reached total time
+                var total_time = times[1];
+    
                 if (elapsed_time === total_time && elapsed_time !== last_elapsed_time) {
-                    // Output to debug console
                     write_to_debug_console('Elapsed time has reached total time.');
-                    // Execute auto_advance function
-                    if (is_checked('auto_advance_tickbox')) {
-                        auto_advance();
-                    }
-                } else if (elapsed_time !== last_elapsed_time) { // Check if the timer has moved
-                    // Update the time when the timer last moved
-                    last_time_moved = new Date().getTime();
-                } else if (elapsed_since_last_move > 3000) { // Check if the timer has stopped moving for 3 seconds
-                    // Output to debug console
-                    write_to_debug_console('Timer has stopped moving for 3 seconds.');
-                    // Execute auto_advance function
                     auto_advance();
+                    guess_practice();
+                } else if (elapsed_time !== last_elapsed_time) {
+                    last_time_moved = new Date().getTime();
+                } else if (elapsed_since_last_move > 3000) {
+                    write_to_debug_console('Timer has stopped moving for 3 seconds.');
+                    auto_advance();
+                    guess_practice();
                 }
-                // Update last observed elapsed time
+    
                 last_elapsed_time = elapsed_time;
             } else {
                 write_to_debug_console('Timer element not found in the iframe.');
-                if (is_checked('guess_practice_tickbox')) {
-                    guess_practice();
-                }
-                if (is_checked('auto_advance_tickbox')) {
-                    auto_advance();
-                }
+                auto_advance();
+                guess_practice();
             }
         } else {
             write_to_debug_console('Iframe not found.');
-            if (is_checked('guess_practice_tickbox')) {
-                guess_practice();
-            }
-            if (is_checked('auto_advance_tickbox')) {
-                auto_advance();
-            }
+            auto_advance();
+            guess_practice();
         }
     }
-
+    
+    
     // Function to observe changes in the timer element
     function observe_timer_changes(timer_element) {
         // Create a MutationObserver to watch for changes in the timer element
@@ -247,7 +232,7 @@
         // Start observing changes to the timer element's content
         observer.observe(timer_element, { subtree: true, character_data: true, child_list: true });
     }
-
+    
     // Function to extract timer information from the iframe content
     function extract_timer_info_from_iframe() {
         write_to_debug_console('Script started...');
@@ -270,13 +255,15 @@
             write_to_debug_console('Iframe not found.');
         }
     }
-
+    
     // Call the extract_timer_info_from_iframe function immediately
     extract_timer_info_from_iframe();
-
+    
     // Function to execute auto_advance function
     function auto_advance() {
-        if (is_checked('auto_advance_tickbox')) {
+        if (!is_checked('auto_advance_tickbox')) {
+            return
+        }
             var activity_title = document.getElementById("activity-title").innerText;
             if (activity_title !== "Quiz") {
                 try {
@@ -291,20 +278,22 @@
                     link.click();
                 });
             }
-        }
     }
-
+    
     function skip_intro() {
         if (is_checked('skip_intro_tickbox')) {
             try { window.frames[0].document.getElementById('invis-o-div').remove(); } catch (e) {}
         }
     }
-
+    
     function guess_practice() {
+        if (!is_checked('guess_practice_tickbox')) {
+            return
+        }
         try {
             const activity_title = document.getElementById('activity-title').innerText;
             if (activity_title === 'Assignment') return;
-
+    
             if (['Instruction', 'Warm-Up', 'Practice'].includes(activity_title)) {
                 const options = window.frames[0].frames[0].document.getElementsByClassName('answer-choice-button');
                 if (options.length) {
@@ -349,4 +338,4 @@
             debug_console.style.display = 'none';
         }
     }
-})();
+})()
